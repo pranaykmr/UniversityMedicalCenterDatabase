@@ -497,7 +497,6 @@ INSERT INTO ImagingTestResults (TestId,
 Results)
   VALUES (1, 'BrokenArm'), (2, 'Congestion')
 
-
 GO
 ALTER TABLE PatientRecords
 WITH NOCHECK ADD CONSTRAINT FK_PatientRecords_PatientInfo FOREIGN KEY (PatientId) REFERENCES PatientInfo (Id)
@@ -601,6 +600,8 @@ BEGIN
   WHERE pr.Id = @PatientRecordId);
 END;
 GO
+
+
 CREATE FUNCTION dbo.fnGetUpdatedCost (@PatientRecordId int
 , @Cost money)
 RETURNS money
@@ -618,26 +619,68 @@ BEGIN
   WHERE pr.Id = @PatientRecordId);
 END;
 GO
+
+
 CREATE VIEW InvoiceDetails
 AS
 SELECT
-  pr.*
-  --, pi.*
-  ,
-  ISNULL(dbo.fnGetPRCost(pr.Id), 0) AS Cost,
-  dbo.fnGetUpdatedCost(pr.Id, ISNULL(dbo.fnGetPRCost(pr.Id), 0)) AS OutOfPocket
+  PatientWeight
+, PatientHeight
+, BloodPressure
+, Temperature
+, CheckInTime
+, CheckOutTime
+, Diagnosis
+, ProcedureId
+, EmployeeId
+, PhysicianId
+, MedicationId
+, ImagingTestId
+, LabTestId
+,pi.*
+,IssuedBy
+,IssuedOn
+,ValidTill
+,Copay
+,CovergePercentage
+,BaseCoverage
+,ISNULL(dbo.fnGetPRCost(pr.Id), 0) AS Cost
+,dbo.fnGetUpdatedCost(pr.Id, ISNULL(dbo.fnGetPRCost(pr.Id), 0)) AS OutOfPocket
 FROM PatientRecords pr
 JOIN PatientInfo pi
   ON pr.PatientId = pi.Id
+JOIN InsuranceInfo ii 
+  ON pi.InsuranceNumber = ii.InsuranceNumber
 GO
+
+
+CREATE VIEW BillingSummary as 
+SELECT Id as PatientId ,
+InsuranceNumber ,
+Copay,
+CovergePercentage,
+BaseCoverage,
+Cost ,
+OutOfPocket as OutOfPocketCost
+from InvoiceDetails
+GO
+
+
 CREATE VIEW PharmacyPrescriptions
 AS
 SELECT
-  phari.*
+  phari.*, medi.MedicationName,
+  medi.Refills ,
+  medi.DozesPerDay,
+  medi.Notes
 FROM PrescriptionInfo presi
 JOIN PharmacyInfo phari
   ON presi.PharmacyId = phari.Id
+JOIN MedicationInfo medi
+  ON medi.PrescriptionId = presi.Id
 GO
+
+
 CREATE VIEW PatientVisitDetails
 AS
 SELECT
@@ -698,6 +741,8 @@ LEFT JOIN LabTestInfo lbti
 LEFT JOIN LabTestResults lbtr
   ON lbtr.TestId = lbti.Id
 GO
+
+
 CREATE VIEW PhysicianScheduleWithDetails
 AS
 SELECT
@@ -745,6 +790,7 @@ JOIN PatientInfo pni
   ON ps.PatientId = pni.Id
 GO
 
+
 CREATE PROC spUpdateRooms @FacilityId int
 AS
   DECLARE @NoOfRooms int
@@ -763,6 +809,8 @@ AS
     , 'Cannot book rooom. No Rooms Available!'
     , 1;
 GO
+
+
 CREATE PROC spUpdateBeds @FacilityId int
 AS
   DECLARE @NoOfBeds int
@@ -937,7 +985,7 @@ BEGIN TRAN;
   DECLARE @OldDoctorId int
 
   SELECT
-    @OldDoctorId = Id
+    @OldDoctorId = pi.Id
   FROM PhyscianInfo pi
   JOIN EmployeeInfo ei
     ON pi.EmpId = ei.Id
@@ -947,7 +995,7 @@ BEGIN TRAN;
   DECLARE @NewDoctorId int
 
   SELECT
-    @NewDoctorId = Id
+    @NewDoctorId = pi.Id
   FROM PhyscianInfo pi
   JOIN EmployeeInfo ei
     ON pi.EmpId = ei.Id
