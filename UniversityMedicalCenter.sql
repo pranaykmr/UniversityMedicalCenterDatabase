@@ -500,7 +500,7 @@ Results)
   VALUES (1, 'BrokenArm'), (2, 'Congestion')
 
 
--- GO
+GO
 ALTER TABLE PatientRecords
 WITH NOCHECK ADD CONSTRAINT FK_PatientRecords_PatientInfo FOREIGN KEY (PatientId) REFERENCES PatientInfo (Id)
 
@@ -640,7 +640,6 @@ FROM PrescriptionInfo presi
 JOIN PharmacyInfo phari
   ON presi.PharmacyId = phari.Id
 GO
-GO
 CREATE VIEW PatientVisitDetails
 AS
 SELECT
@@ -766,8 +765,6 @@ AS
     , 'Cannot book rooom. No Rooms Available!'
     , 1;
 GO
-
-GO
 CREATE PROC spUpdateBeds @FacilityId int
 AS
   DECLARE @NoOfBeds int
@@ -787,7 +784,6 @@ AS
     , 1;
 GO
 
-GO
 CREATE PROC spDischargePatient @PatientId int
 AS
   DECLARE @FacilityId int,
@@ -931,3 +927,43 @@ CREATE USER Pharmacist1
 FOR LOGIN Pharmacy;
 ALTER ROLE Pharmacist ADD MEMBER Pharmacist1;
 GO
+
+-- Transaction to Retire Doctor
+BEGIN TRAN;
+
+  DECLARE @DoctorFirstName nvarchar(255) = '',
+          @DoctorLastName nvarchar(255) = '',
+          @ReplacementDoctorLastName nvarchar(255) = '',
+          @ReplacementDoctorFirstName nvarchar(255) = ''
+
+  DECLARE @OldDoctorId int
+
+  SELECT
+    @OldDoctorId = Id
+  FROM PhyscianInfo pi
+  JOIN EmployeeInfo ei
+    ON pi.EmpId = ei.Id
+  WHERE ei.FirstName = @DoctorFirstName
+  AND ei.LastName = @DoctorLastName
+
+  DECLARE @NewDoctorId int
+
+  SELECT
+    @NewDoctorId = Id
+  FROM PhyscianInfo pi
+  JOIN EmployeeInfo ei
+    ON pi.EmpId = ei.Id
+  WHERE ei.FirstName = @ReplacementDoctorLastName
+  AND ei.LastName = @ReplacementDoctorFirstName
+
+
+  UPDATE PatientInfo
+  SET PrimaryCarePhysician = @NewDoctorId
+  WHERE PrimaryCarePhysician = @OldDoctorId
+
+  UPDATE PhyscianInfo
+  SET Retired = 1,
+      TakingNewPatients = 0
+  WHERE Id = @OldDoctorId;
+
+COMMIT TRAN
