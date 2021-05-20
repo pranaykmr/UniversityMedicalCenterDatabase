@@ -111,8 +111,6 @@ FacilityId,
 AdmitDate)
   VALUES (1, 1, '01-01-2021'), (2, 3, '06-05-2021'), (3, 2, '03-04-2020')
 
-
-
 CREATE TABLE ProcedureInfo (
   Id int NOT NULL,
   ProcedureName nvarchar(50) NOT NULL,
@@ -965,5 +963,28 @@ BEGIN TRAN;
   SET Retired = 1,
       TakingNewPatients = 0
   WHERE Id = @OldDoctorId;
+
+COMMIT TRAN
+
+-- Transaction to Transfer Prescription To Different Pharmacy
+BEGIN TRAN;
+
+  DECLARE @PatientId int = 0,
+          @NewPharmacyId int = 0
+
+  UPDATE PrescriptionInfo
+  SET PharmacyId = @NewPharmacyId,
+      CurrentStatus = 'Processing'
+  WHERE Id IN (SELECT
+    prei.Id
+  FROM PatientRecords pr
+  JOIN PatientInfo pi
+    ON pr.PatientId = pi.Id
+    JOIN MedicationInfo medi
+      ON pr.MedicationId = medi.Id
+    JOIN PrescriptionInfo prei
+      ON medi.PrescriptionId = prei.Id
+  WHERE pi.Id = @PatientId
+  AND prei.CurrentStatus != 'Processed')
 
 COMMIT TRAN
